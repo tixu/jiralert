@@ -81,9 +81,13 @@ func main() {
 				errorHandler(w, http.StatusInternalServerError, err, conf.Name, &data)
 				return
 			}
-			if retry, err := r.Notify(&data); err != nil {
+			if err := r.Notify(&data); err != nil {
+				istemporary := func(err error) bool {
+					te, ok := err.(jiralert.Temporary)
+					return ok && te.Temporary()
+				}
 				var status int
-				if retry {
+				if istemporary(err) {
 					status = http.StatusServiceUnavailable
 				} else {
 					status = http.StatusInternalServerError
