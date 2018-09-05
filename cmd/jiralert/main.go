@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"runtime"
 	"strconv"
 
 	_ "net/http/pprof"
@@ -24,7 +23,9 @@ const (
 var (
 	listenAddress = flag.String("listen-address", ":9097", "The address to listen on for HTTP requests.")
 	configFile    = flag.String("config", "config/jiralert.yml", "The JIRAlert configuration file")
-
+	jirauser      = flag.String("jirauser", "jirauser", "The user accessing JIRA")
+	jirapassword  = flag.String("jirapassword", "jirapassword", "The user's password accessing JIRA")
+	jiraurl       = flag.String("jiraurl", "https://jira.smals.be", "The Jira url")
 	// Version is the build version, set by make to latest git tag/hash via `-ldflags "-X main.Version=$(VERSION)"`.
 	Version = "<local build>"
 	// BuildDate is the Build date
@@ -34,20 +35,11 @@ var (
 )
 
 func main() {
-	if os.Getenv("DEBUG") != "" {
-		runtime.SetBlockProfileRate(1)
-		runtime.SetMutexProfileFraction(1)
-	}
 
-	// Override -alsologtostderr default value.
-	if alsoLogToStderr := flag.Lookup("alsologtostderr"); alsoLogToStderr != nil {
-		alsoLogToStderr.DefValue = "true"
-		alsoLogToStderr.Value.Set("true")
-	}
 	flag.Parse()
-
+	jiraEndpoint := jiralert.APIConfig{URL: *jiraurl, User: *jirauser, Password: *jirapassword}
 	log.Infof("Starting JIRAlert version %s hash %s date %s", Version, Hash, BuildDate)
-	jiralert.ReadConfiguration("config")
+
 	config, err := jiralert.ReadConfiguration("config")
 	if err != nil {
 		log.Fatalf("Error loading configuration: %s", err)
@@ -84,7 +76,7 @@ func main() {
 		}
 
 		if len(data.Alerts) > 0 {
-			r, err := jiralert.NewReceiver(config.API, conf, tmpl)
+			r, err := jiralert.NewReceiver(&jiraEndpoint, conf, tmpl)
 			if err != nil {
 				errorHandler(w, http.StatusInternalServerError, err, conf.Name, &data)
 				return
