@@ -9,8 +9,8 @@ import (
 	"strings"
 
 	"github.com/andygrunwald/go-jira"
-	"github.com/free/jiralert/alertmanager"
 	log "github.com/golang/glog"
+	"github.com/tixu/jiralert/alertmanager"
 	"github.com/trivago/tgo/tcontainer"
 )
 
@@ -22,12 +22,12 @@ type Receiver struct {
 }
 
 // NewReceiver creates a Receiver using the provided configuration and template.
-func NewReceiver(c *ReceiverConfig, t *Template) (*Receiver, error) {
-	client, err := jira.NewClient(http.DefaultClient, c.APIURL)
+func NewReceiver(a *ApiConfig, c *ReceiverConfig, t *Template) (*Receiver, error) {
+	client, err := jira.NewClient(http.DefaultClient, a.URL)
 	if err != nil {
 		return nil, err
 	}
-	client.Authentication.SetBasicAuth(c.User, string(c.Password))
+	client.Authentication.SetBasicAuth(a.User, string(a.Password))
 
 	return &Receiver{conf: c, tmpl: t, client: client}, nil
 }

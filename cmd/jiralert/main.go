@@ -11,10 +11,10 @@ import (
 
 	_ "net/http/pprof"
 
-	"github.com/free/jiralert"
-	"github.com/free/jiralert/alertmanager"
 	log "github.com/golang/glog"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/tixu/jiralert"
+	"github.com/tixu/jiralert/alertmanager"
 )
 
 const (
@@ -46,9 +46,9 @@ func main() {
 	}
 	flag.Parse()
 
-	log.Infof("Starting JIRAlert version %s", Version)
-
-	config, _, err := jiralert.LoadConfigFile(*configFile)
+	log.Infof("Starting JIRAlert version %s hash %s date %s", Version, Hash, BuildDate)
+	jiralert.ReadConfiguration("config")
+	config, err := jiralert.ReadConfiguration("config")
 	if err != nil {
 		log.Fatalf("Error loading configuration: %s", err)
 	}
@@ -84,7 +84,7 @@ func main() {
 		}
 
 		if len(data.Alerts) > 0 {
-			r, err := jiralert.NewReceiver(conf, tmpl)
+			r, err := jiralert.NewReceiver(config.API, conf, tmpl)
 			if err != nil {
 				errorHandler(w, http.StatusInternalServerError, err, conf.Name, &data)
 				return

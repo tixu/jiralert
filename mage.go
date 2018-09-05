@@ -14,11 +14,12 @@ import (
 )
 
 const (
-	packageName = "github.com/tixu/jiralert"
+	packageName = "github.com/tixu/jiralert/cmd/jiralert"
+	executable  = "jiralert.exe"
 )
 
 // ldflags used to build.
-var ldflags = "-X main.Version=$(VERSION) -X main.BuildDate=${BUILD_DATE} -X main.Hash=${COMMIT_HASH} "
+var ldflags = "-X main.Version=${VERSION} -X main.BuildDate=${BUILD_DATE} -X main.Hash=${COMMIT_HASH} "
 
 // allow user to override go executable by running as GOEXE=xxx make ... on unix-like systems
 var goexe = "go"
@@ -26,7 +27,7 @@ var goexe = "go"
 // Runs go build for jiralert.
 func Build() error {
 
-	return sh.RunWith(flagEnv(), goexe, "build", "--ldflags="+ldflags, packageName)
+	return sh.RunWith(flagEnv(), goexe, "build", "--ldflags="+ldflags, "-o", executable, packageName)
 }
 
 // Generates binaries for all supported versions.  Currently that means a
@@ -68,9 +69,10 @@ func init() {
 func flagEnv() map[string]string {
 	hash, _ := sh.Output("git", "rev-parse", "--short", "HEAD")
 	//git describe --tags
-	tag, _ := sh.Output("git", "describe", "--tags")
+	tag, _ := sh.Output("git", "describe", "--tags", "--abbrev=0")
 	return map[string]string{
 		"COMMIT_TAG":  tag,
+		"VERSION":     tag,
 		"COMMIT_HASH": hash,
 		"BUILD_DATE":  time.Now().Format("2006-01-02T15:04:05Z0700"),
 	}

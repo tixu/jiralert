@@ -5,11 +5,11 @@ import (
 	"html/template"
 	"net/http"
 
-	"github.com/free/jiralert"
+	"github.com/tixu/jiralert"
 )
 
 const (
-	docsUrl   = "https://github.com/free/jiralert#readme"
+	docsURL   = "https://github.com/tixu/jiralert#readme"
 	templates = `
     {{ define "page" -}}
       <html>
@@ -62,7 +62,7 @@ const (
 )
 
 type tdata struct {
-	DocsUrl string
+	DocsURL string
 
 	// `/config` only
 	Config string
@@ -87,7 +87,7 @@ func pageTemplate(name string) *template.Template {
 func HomeHandlerFunc() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		homeTemplate.Execute(w, &tdata{
-			DocsUrl: docsUrl,
+			DocsURL: docsURL,
 		})
 	}
 }
@@ -96,7 +96,7 @@ func HomeHandlerFunc() func(http.ResponseWriter, *http.Request) {
 func ConfigHandlerFunc(config *jiralert.Config) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		configTemplate.Execute(w, &tdata{
-			DocsUrl: docsUrl,
+			DocsURL: docsURL,
 			Config:  config.String(),
 		})
 	}
@@ -107,7 +107,7 @@ func ConfigHandlerFunc(config *jiralert.Config) func(http.ResponseWriter, *http.
 func HandleError(err error, metricsPath string, w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusInternalServerError)
 	errorTemplate.Execute(w, &tdata{
-		DocsUrl: docsUrl,
+		DocsURL: docsURL,
 		Err:     err,
 	})
 }
