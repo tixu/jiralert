@@ -9,11 +9,12 @@ import (
 	"runtime"
 	"strconv"
 
+	_ "net/http/pprof"
+
 	"github.com/free/jiralert"
 	"github.com/free/jiralert/alertmanager"
 	log "github.com/golang/glog"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	_ "net/http/pprof"
 )
 
 const (
@@ -26,6 +27,10 @@ var (
 
 	// Version is the build version, set by make to latest git tag/hash via `-ldflags "-X main.Version=$(VERSION)"`.
 	Version = "<local build>"
+	// BuildDate is the Build date
+	BuildDate = "<build_date>"
+	// Hash is the git hash
+	Hash = "<hash>"
 )
 
 func main() {

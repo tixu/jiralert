@@ -6,25 +6,27 @@
 package main
 
 import (
-	"log"
+	"fmt"
+	"os"
+	"time"
+
+	"github.com/magefile/mage/sh"
 )
 
-// Runs go install for gnorm.  This generates the embedded docs and the version
-// info into the binary.
+const (
+	packageName = "github.com/tixu/jiralert"
+)
+
+// ldflags used to build.
+var ldflags = "-X main.Version=$(VERSION) -X main.BuildDate=${BUILD_DATE} -X main.Hash=${COMMIT_HASH} "
+
+// allow user to override go executable by running as GOEXE=xxx make ... on unix-like systems
+var goexe = "go"
+
+// Runs go build for jiralert.
 func Build() error {
-	if err := genSite(); err != nil {
-		return err
-	}
-	defer cleanup()
 
-	ldf, err := flags()
-	if err != nil {
-		return err
-	}
-
-	log.Print("running go install")
-	// use -tags make so we can have different behavior for when we know we've built with mage.
-	return run("go", "build", "-tags", "make", "--ldflags="+ldf, "github.com/free/jiralert/cmd/jiralert")
+	return sh.RunWith(flagEnv(), goexe, "build", "--ldflags="+ldflags, packageName)
 }
 
 // Generates binaries for all supported versions.  Currently that means a
@@ -32,15 +34,7 @@ func Build() error {
 // files will be dumped in the local directory with names according to their
 // supported platform.
 func All() error {
-	if err := genSite(); err != nil {
-		return err
-	}
-	defer cleanup()
-
-	ldf, err := flags()
-	if err != nil {
-		return err
-	}
+	/**
 	for _, OS := range []string{"windows", "darwin", "linux"} {
 		for _, ARCH := range []string{"amd64", "386"} {
 			log.Printf("running go build for GOOS=%s GOARCH=%s", OS, ARCH)
@@ -51,10 +45,33 @@ func All() error {
 		}
 	}
 	return err
+	*/
+	return fmt.Errorf("unimplemented")
 }
 
 // Removes generated cruft.  This target shouldn't ever be necessary, since the
 // cleanup should happen automatically, but it's here just in case.
 func Clean() error {
-	return cleanup()
+	return fmt.Errorf("unimplemented")
+}
+
+func init() {
+	if exe := os.Getenv("GOEXE"); exe != "" {
+		goexe = exe
+	}
+	fmt.Println("activating module mode")
+	// We want to use Go 1.11 modules even if the source lives inside GOPATH.
+	// The default is "auto".
+	os.Setenv("GO111MODULE", "on")
+}
+
+func flagEnv() map[string]string {
+	hash, _ := sh.Output("git", "rev-parse", "--short", "HEAD")
+	//git describe --tags
+	tag, _ := sh.Output("git", "describe", "--tags")
+	return map[string]string{
+		"COMMIT_TAG":  tag,
+		"COMMIT_HASH": hash,
+		"BUILD_DATE":  time.Now().Format("2006-01-02T15:04:05Z0700"),
+	}
 }
