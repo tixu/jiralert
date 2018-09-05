@@ -4,13 +4,14 @@ import (
 	"fmt"
 	"strings"
 
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
-
 	"gopkg.in/yaml.v2"
 )
 
 // ReadConfiguration parses the YAML input into a Config
 func ReadConfiguration(configDir string) (*Config, error) {
+	log.Info("loading configuration")
 	cfg := &Config{}
 	viper.AddConfigPath(configDir)
 	viper.SetConfigName("jiralert")
@@ -24,12 +25,12 @@ func ReadConfiguration(configDir string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Printf("config : %v", *cfg)
+
 	return cfg, nil
 }
 
 //APIConfig contains API access fields (URL, user and password)
-type ApiConfig struct {
+type APIConfig struct {
 	// API access fields
 	URL      string
 	User     string
@@ -62,7 +63,7 @@ type ReceiverConfig struct {
 
 // Config is the top-level configuration for JIRAlert's config file.
 type Config struct {
-	API       *ApiConfig
+	API       *APIConfig
 	Receivers []*ReceiverConfig
 	Template  string
 

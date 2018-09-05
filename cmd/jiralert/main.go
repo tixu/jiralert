@@ -11,8 +11,8 @@ import (
 
 	_ "net/http/pprof"
 
-	log "github.com/golang/glog"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	log "github.com/sirupsen/logrus"
 	"github.com/tixu/jiralert"
 	"github.com/tixu/jiralert/alertmanager"
 )
@@ -59,7 +59,7 @@ func main() {
 	}
 
 	http.HandleFunc("/alert", func(w http.ResponseWriter, req *http.Request) {
-		log.V(1).Infof("Handling /alert webhook request")
+		log.Infof("Handling /alert webhook request")
 		defer req.Body.Close()
 
 		// https://godoc.org/github.com/prometheus/alertmanager/template#Data
@@ -74,7 +74,7 @@ func main() {
 			errorHandler(w, http.StatusNotFound, fmt.Errorf("Receiver missing: %s", data.Receiver), unknownReceiver, &data)
 			return
 		}
-		log.V(1).Infof("Matched receiver: %q", conf.Name)
+		log.Infof("Matched receiver: %q", conf.Name)
 
 		// Filter out resolved alerts, not interested in them.
 		alerts := data.Alerts.Firing()

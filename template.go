@@ -6,7 +6,7 @@ import (
 	"strings"
 	"text/template"
 
-	log "github.com/golang/glog"
+	log "github.com/sirupsen/logrus"
 )
 
 // Template wraps a text template and error, to make it easier to execute multiple templates and only check for errors
@@ -33,7 +33,7 @@ var funcs = template.FuncMap{
 
 // LoadTemplate reads and parses all templates defined in the given file and constructs a jiralert.Template.
 func LoadTemplate(path string) (*Template, error) {
-	log.V(1).Infof("Loading templates from %q", path)
+	log.Infof("Loading templates from %q", path)
 	tmpl, err := template.New("").Option("missingkey=zero").Funcs(funcs).ParseFiles(path)
 	if err != nil {
 		return nil, err
@@ -45,9 +45,9 @@ func LoadTemplate(path string) (*Template, error) {
 // defined in t.tmpl (so they may be referenced and used) and applies the resulting template to the specified data
 // object, returning the output as a string.
 func (t *Template) Execute(text string, data interface{}) string {
-	log.V(2).Infof("Executing template %q...", text)
+	log.Infof("Executing template %q...", text)
 	if !strings.Contains(text, "{{") {
-		log.V(2).Infof("  returning unchanged.")
+		log.Infof("  returning unchanged.")
 		return text
 	}
 
@@ -61,12 +61,12 @@ func (t *Template) Execute(text string, data interface{}) string {
 	}
 	tmpl, t.err = tmpl.New("").Parse(text)
 	if t.err != nil {
-		log.V(2).Infof("  parse failed.")
+		log.Infof("  parse failed.")
 		return ""
 	}
 	var buf bytes.Buffer
 	t.err = tmpl.Execute(&buf, data)
 	ret := buf.String()
-	log.V(2).Infof("  returning %q.", ret)
+	log.Infof("  returning %q.", ret)
 	return ret
 }

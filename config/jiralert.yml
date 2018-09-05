@@ -2,19 +2,16 @@
 # 
 #  password: 'JIRAlert'
 api: 
-  # lmkdflmkdlm
-  url: https://jira.smals.be
-  user: jiralert/config
-  password: 'JIRAlert'
-
+  url: https://accjira.smals.be
+  user: xz
+  password: '%123Azerty%'
 # Receiver definitions. At least one must be defined.
 receivers:
     # Must match the Alertmanager receiver name. Required.
   - name: 'jira-ab'
     # JIRA project to create the issue in. Required.
-    project: AB
+    project: EA
     # Copy all Prometheus labels into separate JIRA labels. Optional (default: false).
-    
     # The type of JIRA issue to create. Required.
     issuetype: Bug
     # Issue priority. Optional.
@@ -24,13 +21,12 @@ receivers:
     # Go template invocation for generating the description. Optional.
     description: '{{ template "jira.description" . }}'
     # State to transition into when reopening a closed issue. Required.
-    reopenstate: "To Do"
+    reopenstate: "Reopen Issue"
     # Do not reopen issues with this resolution. Optional.
     wontfixresolution: "Won't Fix"
   # State to transition into when reopening a closed issue. Required.
-    reopen_state: "To Do"
     addgrouplabels: false
-
+    components: ['Operations']
   
 # File containing template definitions. Required.
-template: C:\\dev\\go\\src\\github.com\\tixu\\jiralert\\config\\jiralert.yml
+template: C:\\dev\\go\\src\\github.com\\tixu\\jiralert\\config\\jiralert.tmpl

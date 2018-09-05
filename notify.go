@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/andygrunwald/go-jira"
-	log "github.com/golang/glog"
+	log "github.com/sirupsen/logrus"
 	"github.com/tixu/jiralert/alertmanager"
 	"github.com/trivago/tgo/tcontainer"
 )
@@ -22,7 +22,7 @@ type Receiver struct {
 }
 
 // NewReceiver creates a Receiver using the provided configuration and template.
-func NewReceiver(a *ApiConfig, c *ReceiverConfig, t *Template) (*Receiver, error) {
+func NewReceiver(a *APIConfig, c *ReceiverConfig, t *Template) (*Receiver, error) {
 	client, err := jira.NewClient(http.DefaultClient, a.URL)
 	if err != nil {
 		return nil, err
@@ -51,7 +51,7 @@ func (r *Receiver) Notify(data *alertmanager.Data) (bool, error) {
 		// The set of JIRA status categories is fixed, this is a safe check to make.
 		if issue.Fields.Status.StatusCategory.Key != "done" {
 			// Issue is in a "to do" or "in progress" state, all done here.
-			log.V(1).Infof("Issue %s for %s is unresolved, nothing to do", issue.Key, issueLabel)
+			log.Infof("Issue %s for %s is unresolved, nothing to do", issue.Key, issueLabel)
 			return false, nil
 		}
 		if r.conf.WontFixResolution != "" && issue.Fields.Resolution != nil &&
@@ -169,7 +169,7 @@ func (r *Receiver) search(project, issueLabel string) (*jira.Issue, bool, error)
 		Fields:     []string{"summary", "status", "resolution"},
 		MaxResults: 50,
 	}
-	log.V(1).Infof("search: query=%v options=%+v", query, options)
+	log.Infof("search: query=%v options=%+v", query, options)
 	issues, resp, err := r.client.Issue.Search(query, options)
 	if err != nil {
 		retry, err := handleJiraError("Issue.Search", resp, err)
@@ -180,10 +180,10 @@ func (r *Receiver) search(project, issueLabel string) (*jira.Issue, bool, error)
 			// Swallow it, but log an error.
 			log.Errorf("More than one issue matched %s, will only update first: %+v", query, issues)
 		}
-		log.V(1).Infof("  found: %+v", issues[0])
+		log.Infof("  found: %+v", issues[0])
 		return &issues[0], false, nil
 	}
-	log.V(1).Infof("  no results")
+	log.Infof("  no results")
 	return nil, false, nil
 }
 
@@ -194,12 +194,12 @@ func (r *Receiver) reopen(issueKey string) (bool, error) {
 	}
 	for _, t := range transitions {
 		if t.Name == r.conf.ReopenState {
-			log.V(1).Infof("reopen: issueKey=%v transitionID=%v", issueKey, t.ID)
+			log.Infof("reopen: issueKey=%v transitionID=%v", issueKey, t.ID)
 			resp, err = r.client.Issue.DoTransition(issueKey, t.ID)
 			if err != nil {
 				return handleJiraError("Issue.DoTransition", resp, err)
 			}
-			log.V(1).Infof("  done")
+			log.Infof("  done")
 			return false, nil
 		}
 	}
@@ -207,21 +207,21 @@ func (r *Receiver) reopen(issueKey string) (bool, error) {
 }
 
 func (r *Receiver) create(issue *jira.Issue) (bool, error) {
-	log.V(1).Infof("create: issue=%v", *issue)
+	log.Infof("create: issue=%v", *issue)
 	issue, resp, err := r.client.Issue.Create(issue)
 	if err != nil {
 		return handleJiraError("Issue.Create", resp, err)
 	}
 
-	log.V(1).Infof("  done: key=%s ID=%s", issue.Key, issue.ID)
+	log.Infof("  done: key=%s ID=%s", issue.Key, issue.ID)
 	return false, nil
 }
 
 func handleJiraError(api string, resp *jira.Response, err error) (bool, error) {
 	if resp == nil || resp.Request == nil {
-		log.V(1).Infof("handleJiraError: api=%s, err=%s", api, err)
+		log.Infof("handleJiraError: api=%s, err=%s", api, err)
 	} else {
-		log.V(1).Infof("handleJiraError: api=%s, url=%s, err=%s", api, resp.Request.URL, err)
+		log.Infof("handleJiraError: api=%s, url=%s, err=%s", api, resp.Request.URL, err)
 	}
 
 	if resp != nil && resp.StatusCode/100 != 2 {
