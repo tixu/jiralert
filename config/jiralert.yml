@@ -13,6 +13,8 @@ receivers:
     summary: '{{ template "jira.alarm.summary" . }}'
     # Go template invocation for generating the description. Optional.
     description: '{{ template "jira.alarm.description" . }}'
+    # Go template invocation for generating the comments. Optional.
+    comment: '{{ template "jira.alarm.comment" . }}'
     # State to transition into when reopening a closed issue. Required.
     reopenstate: "Reopen Issue"
     # Do not reopen issues with this resolution. Optional.

@@ -50,6 +50,7 @@ type ReceiverConfig struct {
 	// Optional issue fields
 	Priority          string
 	Description       string
+	Comment           string
 	WontFixResolution string
 	Fields            map[string]interface{}
 	Components        []string

@@ -1,7 +1,12 @@
 {{ define "jira.alarm.summary" }}
-
    {{.Annotations.Summary}}
 {{end}}
+
+{{ define "jira.alarm.comment" }}{{.Status}}: {{.Annotations.Description}}{{end}}
+
+
+
+
 {{ define "jira.alarm.description" }}
 Description : 
    {{.Annotations.Description}}

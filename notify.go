@@ -8,7 +8,7 @@ import (
 	"net/http/httputil"
 	"reflect"
 	"strings"
-	"encoding/json"
+
 
 	"github.com/andygrunwald/go-jira"
 	log "github.com/sirupsen/logrus"
@@ -76,6 +76,7 @@ func (r *Receiver) Notify(data *alertmanager.Data) error {
 		}
 
 		if issue != nil {
+			r.addComment(issue,r.tmpl.Execute(r.conf.Comment, alert))
 			// The set of JIRA status categories is fixed, this is a safe check to make.
 			if issue.Fields.Status.StatusCategory.Key != "done" {
 				// Issue is in a "to do" or "in progress" state, all done here.
@@ -132,9 +133,7 @@ func (r *Receiver) Notify(data *alertmanager.Data) error {
 			}
 		}
 
-		for key, value := range r.conf.Fields {
-			issue.Fields.Unknowns[key] = deepCopyWithTemplate(value, r.tmpl, data)
-		}
+		
 		// check errors from r.tmpl.Execute()
 		if r.tmpl.err != nil {
 			mutlipeErrors = multierr.Append(mutlipeErrors, temporaryError{r.tmpl.err.Error(), false})
@@ -227,7 +226,12 @@ func (r *Receiver) search(project, issueLabel string) (*jira.Issue, error) {
 	log.Infof("  no results")
 	return nil, nil
 }
+func (r *Receiver) addComment(issue *jira.Issue, commentstring string) error {
+	comment := &jira.Comment{Body:commentstring}
+	comment, _, err := r.client.Issue.AddComment(issue.ID, comment)
+	return err
 
+}
 func (r *Receiver) reopen(issueKey string) error {
 	transitions, resp, err := r.client.Issue.GetTransitions(issueKey)
 	if err != nil {
@@ -269,7 +273,7 @@ func handleJiraError(api string, resp *jira.Response, err error) error {
 	if resp != nil && resp.StatusCode/100 != 2 {
 		retry := resp.StatusCode == 500 || resp.StatusCode == 503
 		body, _ := ioutil.ReadAll(resp.Body)
-		fmt.Println(formatRequest(resp.Request))
+		
 		requestDump, err := httputil.DumpRequest(resp.Request, false)
 		if err != nil {
 		  	fmt.Println(err)
@@ -283,42 +287,3 @@ func handleJiraError(api string, resp *jira.Response, err error) error {
 	return temporaryError{tmp: false, msg: fmt.Sprintf("JIRA request %s failed: %s", api, err)}
 }
 
-// formatRequest generates ascii representation of a request
-func formatRequest(r *http.Request) string {
-	// Create return string
-	var request []string
-   
-	// Add the request string
-	url := fmt.Sprintf("%v %v %v", r.Method, r.URL, r.Proto)
-	request = append(request, url)
-   
-	// Add the host
-	request = append(request, fmt.Sprintf("Host: %v", r.Host))
-   
-	// Loop through headers
-	for name, headers := range r.Header {
-	  name = strings.ToLower(name)
-	  for _, h := range headers {
-		request = append(request, fmt.Sprintf("%v: %v", name, h))
-	  }
-	}
-	
-	// If this is a POST, add post data
-	if r.Method == "POST" {
-	   r.ParseForm()
-	   request = append(request, "\n")
-	   request = append(request, r.Form.Encode())
-	} 
-   
-	 // Return the request as a string
-	 return strings.Join(request, "\n")
-   }
-
-
-   func PrettyPrint(v interface{}) (err error) {
-	b, err := json.MarshalIndent(v, "", "  ")
-	if err == nil {
-			fmt.Println(string(b))
-	}
-	return
-}
