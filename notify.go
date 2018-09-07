@@ -5,13 +5,16 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/http/httputil"
 	"reflect"
 	"strings"
+	"encoding/json"
 
 	"github.com/andygrunwald/go-jira"
 	log "github.com/sirupsen/logrus"
 	"github.com/tixu/jiralert/alertmanager"
 	"github.com/trivago/tgo/tcontainer"
+	"go.uber.org/multierr"
 )
 
 // Receiver wraps a JIRA client corresponding to a specific Alertmanager receiver, with its configuration and templates.
@@ -48,7 +51,8 @@ func NewReceiver(a *APIConfig, c *ReceiverConfig, t *Template) (*Receiver, error
 	return &Receiver{conf: c, tmpl: t, client: client}, nil
 }
 
-// Notify implements the Notifier interface.
+
+// NotifyMulitple implements the Notifier interface.
 func (r *Receiver) Notify(data *alertmanager.Data) error {
 	project := r.tmpl.Execute(r.conf.Project, data)
 	// check errors from r.tmpl.Execute()
@@ -56,80 +60,97 @@ func (r *Receiver) Notify(data *alertmanager.Data) error {
 		return temporaryError{msg: r.tmpl.err.Error(), tmp: false}
 
 	}
-	// Looks like an ALERT metric name, with spaces removed.
-	issueLabel := toIssueLabel(data.GroupLabels)
-
-	issue, err := r.search(project, issueLabel)
-	if err != nil {
-		return err
-	}
-
-	if issue != nil {
-		// The set of JIRA status categories is fixed, this is a safe check to make.
-		if issue.Fields.Status.StatusCategory.Key != "done" {
-			// Issue is in a "to do" or "in progress" state, all done here.
-			log.Infof("Issue %s for %s is unresolved, nothing to do", issue.Key, issueLabel)
-			return nil
+	log.Infof("looping on the alerts from the group %s", toIssueLabel(data.CommonLabels))
+	// multipeErrors will be used to stock errors
+	// occuring while iterating on alarms
+	var mutlipeErrors error
+	for _, alert := range data.Alerts {
+		// Looks like an ALERT metric name, with spaces removed.
+		issueLabel := toIssueLabel(alert.Labels)
+		log.Infof("looking for issue with label : %s", issueLabel)
+		issue, err := r.search(project, issueLabel)
+		if err != nil {
+			log.Warnf("got an error while searching %s", err)
+			mutlipeErrors = multierr.Append(mutlipeErrors, err)
+			continue
 		}
-		if r.conf.WontFixResolution != "" && issue.Fields.Resolution != nil &&
-			issue.Fields.Resolution.Name == r.conf.WontFixResolution {
-			// Issue is resolved as "Won't Fix" or equivalent, log a message just in case.
-			log.Infof("Issue %s for %s is resolved as %q, not reopening", issue.Key, issueLabel, issue.Fields.Resolution.Name)
-			return nil
+
+		if issue != nil {
+			// The set of JIRA status categories is fixed, this is a safe check to make.
+			if issue.Fields.Status.StatusCategory.Key != "done" {
+				// Issue is in a "to do" or "in progress" state, all done here.
+				log.Infof("Issue %s for %s is unresolved, nothing to do", issue.Key, issueLabel)
+				// nothing to be done on this issues
+				continue
+			}
+			if r.conf.WontFixResolution != "" && issue.Fields.Resolution != nil &&
+				issue.Fields.Resolution.Name == r.conf.WontFixResolution {
+				// Issue is resolved as "Won't Fix" or equivalent, log a message just in case.
+				log.Infof("Issue %s for %s is resolved as %q, not reopening", issue.Key, issueLabel, issue.Fields.Resolution.Name)
+				// nothing to be done on this issues
+				continue
+			}
+			log.Infof("Issue %s for %s was resolved, reopening", issue.Key, issueLabel)
+			if err := r.reopen(issue.Key); err != nil {
+				mutlipeErrors = multierr.Append(mutlipeErrors, err)
+			}
+			continue
 		}
-		log.Infof("Issue %s for %s was resolved, reopening", issue.Key, issueLabel)
-		return r.reopen(issue.Key)
-	}
 
-	log.Infof("No issue matching %s found, creating new issue", issueLabel)
+		log.Infof("No issue matching %s found, creating new issue", issueLabel)
 
-	issue = &jira.Issue{
-		Fields: &jira.IssueFields{
-			Project:     jira.Project{Key: project},
-			Type:        jira.IssueType{Name: r.tmpl.Execute(r.conf.IssueType, data)},
-			Description: r.tmpl.Execute(r.conf.Description, data),
-			Summary:     r.tmpl.Execute(r.conf.Summary, data),
-			Labels: []string{
-				issueLabel,
+		issue = &jira.Issue{
+			Fields: &jira.IssueFields{
+				Project:     jira.Project{Key: project},
+				Type:        jira.IssueType{Name: r.tmpl.Execute(r.conf.IssueType, data)},
+				Description: r.tmpl.Execute(r.conf.Description, alert),
+				Summary:     r.tmpl.Execute(r.conf.Summary, alert),
+				Labels: []string{
+					issueLabel,
+				},
+
+				Unknowns: tcontainer.NewMarshalMap(),
 			},
-
-			Unknowns: tcontainer.NewMarshalMap(),
-		},
-	}
-	if r.conf.Priority != "" {
-		issue.Fields.Priority = &jira.Priority{Name: r.tmpl.Execute(r.conf.Priority, data)}
-	}
-
-	// Add Components
-	if len(r.conf.Components) > 0 {
-		issue.Fields.Components = make([]*jira.Component, 0, len(r.conf.Components))
-		for _, component := range r.conf.Components {
-			issue.Fields.Components = append(issue.Fields.Components, &jira.Component{Name: component})
 		}
-	}
-
-	// Add Labels
-	if r.conf.AddGroupLabels {
-		for k, v := range data.GroupLabels {
-			issue.Fields.Labels = append(issue.Fields.Labels, fmt.Sprintf("%s=%q", k, v))
+		log.Printf("issue.field %+v", issue.Fields)
+		if r.conf.Priority != "" {
+			issue.Fields.Priority = &jira.Priority{Name: r.conf.Priority}
 		}
-	}
 
-	for key, value := range r.conf.Fields {
-		issue.Fields.Unknowns[key] = deepCopyWithTemplate(value, r.tmpl, data)
-	}
-	// check errors from r.tmpl.Execute()
-	if r.tmpl.err != nil {
-		return temporaryError{r.tmpl.err.Error(), false}
-	}
-	err = r.create(issue)
-	log.Infof("issue %+v", issue)
-	if err == nil {
+		// Add Components
+		if len(r.conf.Components) > 0 {
+			issue.Fields.Components = make([]*jira.Component, 0, len(r.conf.Components))
+			for _, component := range r.conf.Components {
+				issue.Fields.Components = append(issue.Fields.Components, &jira.Component{Name: component})
+			}
+		}
+
+		// Add Labels
+		if r.conf.AddGroupLabels {
+			for k, v := range data.GroupLabels {
+				issue.Fields.Labels = append(issue.Fields.Labels, fmt.Sprintf("%s=%q", k, v))
+			}
+		}
+
+		for key, value := range r.conf.Fields {
+			issue.Fields.Unknowns[key] = deepCopyWithTemplate(value, r.tmpl, data)
+		}
+		// check errors from r.tmpl.Execute()
+		if r.tmpl.err != nil {
+			mutlipeErrors = multierr.Append(mutlipeErrors, temporaryError{r.tmpl.err.Error(), false})
+		}
+		issue, err = r.create(issue)
+		log.Infof("issue %+v", issue)
+		if err != nil {
+			mutlipeErrors = multierr.Append(mutlipeErrors, err)
+			continue
+		}
 		log.Infof("Issue created: key=%s ID=%s", issue.Key, issue.ID)
 	}
-	return err
-}
 
+	return mutlipeErrors
+
+}
 // deepCopyWithTemplate returns a deep copy of a map/slice/array/string/int/bool or combination thereof, executing the
 // provided template (with the provided data) on all string keys or values. All maps are connverted to
 // map[string]interface{}, with all non-string keys discarded.
@@ -226,17 +247,16 @@ func (r *Receiver) reopen(issueKey string) error {
 	return temporaryError{tmp: false, msg: fmt.Sprintf("JIRA state %q does not exist or no transition possible for %s", r.conf.ReopenState, issueKey)}
 }
 
-func (r *Receiver) create(issue *jira.Issue) error {
-	log.Infof("create: issue=%+v", issue)
-	var resp *jira.Response
-	var err error
-	issue, resp, err = r.client.Issue.Create(issue)
+
+func (r *Receiver) create(issue *jira.Issue) (*jira.Issue, error) {
+	log.Infof("create: issue=%+v", *issue)
+	issue, resp, err := r.client.Issue.Create(issue)
 	if err != nil {
-		return handleJiraError("Issue.Create", resp, err)
+		return nil, handleJiraError("Issue.Create", resp, err)
 	}
 
 	log.Infof("  done: key=%s ID=%s", issue.Key, issue.ID)
-	return nil
+	return issue, nil
 }
 
 func handleJiraError(api string, resp *jira.Response, err error) error {
@@ -249,8 +269,56 @@ func handleJiraError(api string, resp *jira.Response, err error) error {
 	if resp != nil && resp.StatusCode/100 != 2 {
 		retry := resp.StatusCode == 500 || resp.StatusCode == 503
 		body, _ := ioutil.ReadAll(resp.Body)
+		fmt.Println(formatRequest(resp.Request))
+		requestDump, err := httputil.DumpRequest(resp.Request, false)
+		if err != nil {
+		  	fmt.Println(err)
+		}
+		fmt.Println(string(requestDump))
+
+		
 		// go-jira error message is not particularly helpful, replace it
 		return temporaryError{msg: fmt.Sprintf("JIRA request %s returned status %s, body %q", resp.Request.URL, resp.Status, string(body)), tmp: retry}
 	}
 	return temporaryError{tmp: false, msg: fmt.Sprintf("JIRA request %s failed: %s", api, err)}
+}
+
+// formatRequest generates ascii representation of a request
+func formatRequest(r *http.Request) string {
+	// Create return string
+	var request []string
+   
+	// Add the request string
+	url := fmt.Sprintf("%v %v %v", r.Method, r.URL, r.Proto)
+	request = append(request, url)
+   
+	// Add the host
+	request = append(request, fmt.Sprintf("Host: %v", r.Host))
+   
+	// Loop through headers
+	for name, headers := range r.Header {
+	  name = strings.ToLower(name)
+	  for _, h := range headers {
+		request = append(request, fmt.Sprintf("%v: %v", name, h))
+	  }
+	}
+	
+	// If this is a POST, add post data
+	if r.Method == "POST" {
+	   r.ParseForm()
+	   request = append(request, "\n")
+	   request = append(request, r.Form.Encode())
+	} 
+   
+	 // Return the request as a string
+	 return strings.Join(request, "\n")
+   }
+
+
+   func PrettyPrint(v interface{}) (err error) {
+	b, err := json.MarshalIndent(v, "", "  ")
+	if err == nil {
+			fmt.Println(string(b))
+	}
+	return
 }

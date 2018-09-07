@@ -10,9 +10,9 @@ receivers:
     # Issue priority. Optional.
     priority: Critical
     # Go template invocation for generating the summary. Required.
-    summary: '{{ template "jira.summary" . }}'
+    summary: '{{ template "jira.alarm.summary" . }}'
     # Go template invocation for generating the description. Optional.
-    description: '{{ template "jira.description" . }}'
+    description: '{{ template "jira.alarm.description" . }}'
     # State to transition into when reopening a closed issue. Required.
     reopenstate: "Reopen Issue"
     # Do not reopen issues with this resolution. Optional.
