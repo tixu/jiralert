@@ -9,14 +9,13 @@ import (
 	"reflect"
 	"strings"
 
-
-	"github.com/andygrunwald/go-jira"
 	log "github.com/sirupsen/logrus"
 	"github.com/tixu/jiralert/alertmanager"
 	"github.com/trivago/tgo/tcontainer"
-	"go.uber.org/multierr"
+	"github.com/andygrunwald/go-jira"
 )
 
+//github.com/andygrunwald/go-jira
 // Receiver wraps a JIRA client corresponding to a specific Alertmanager receiver, with its configuration and templates.
 type Receiver struct {
 	conf   *ReceiverConfig
@@ -32,12 +31,21 @@ type temporaryError struct {
 	tmp bool
 }
 
+type StatusNotify struct {
+	Status int
+	Err    error
+}
+
 func (e temporaryError) Error() string {
 	return fmt.Sprintf("temporary error %s", e.msg)
 }
 
 func (e temporaryError) Temporary() bool {
 	return e.tmp
+}
+
+type Notifier interface {
+	Notify(data *alertmanager.Data) map[string]StatusNotify
 }
 
 // NewReceiver creates a Receiver using the provided configuration and template.
@@ -51,19 +59,18 @@ func NewReceiver(a *APIConfig, c *ReceiverConfig, t *Template) (*Receiver, error
 	return &Receiver{conf: c, tmpl: t, client: client}, nil
 }
 
-
-// NotifyMulitple implements the Notifier interface.
-func (r *Receiver) Notify(data *alertmanager.Data) error {
+// Notify implements the Notifier interface.
+func (r *Receiver) Notify(data *alertmanager.Data) (map[string]StatusNotify, error) {
+	var m map[string]StatusNotify = make(map[string]StatusNotify)
 	project := r.tmpl.Execute(r.conf.Project, data)
 	// check errors from r.tmpl.Execute()
 	if r.tmpl.err != nil {
-		return temporaryError{msg: r.tmpl.err.Error(), tmp: false}
-
+		return nil, r.tmpl.err
 	}
 	log.Infof("looping on the alerts from the group %s", toIssueLabel(data.CommonLabels))
 	// multipeErrors will be used to stock errors
 	// occuring while iterating on alarms
-	var mutlipeErrors error
+
 	for _, alert := range data.Alerts {
 		// Looks like an ALERT metric name, with spaces removed.
 		issueLabel := toIssueLabel(alert.Labels)
@@ -71,17 +78,19 @@ func (r *Receiver) Notify(data *alertmanager.Data) error {
 		issue, err := r.search(project, issueLabel)
 		if err != nil {
 			log.Warnf("got an error while searching %s", err)
-			mutlipeErrors = multierr.Append(mutlipeErrors, err)
+			m[issueLabel] = StatusNotify{Status: http.StatusInternalServerError, Err: err}
+
 			continue
 		}
 
 		if issue != nil {
-			r.addComment(issue,r.tmpl.Execute(r.conf.Comment, alert))
+			r.addComment(issue, r.tmpl.Execute(r.conf.Comment, alert))
 			// The set of JIRA status categories is fixed, this is a safe check to make.
 			if issue.Fields.Status.StatusCategory.Key != "done" {
 				// Issue is in a "to do" or "in progress" state, all done here.
 				log.Infof("Issue %s for %s is unresolved, nothing to do", issue.Key, issueLabel)
 				// nothing to be done on this issues
+				m[issueLabel] = StatusNotify{Status: http.StatusOK, Err: nil}
 				continue
 			}
 			if r.conf.WontFixResolution != "" && issue.Fields.Resolution != nil &&
@@ -93,8 +102,10 @@ func (r *Receiver) Notify(data *alertmanager.Data) error {
 			}
 			log.Infof("Issue %s for %s was resolved, reopening", issue.Key, issueLabel)
 			if err := r.reopen(issue.Key); err != nil {
-				mutlipeErrors = multierr.Append(mutlipeErrors, err)
+				m[issueLabel] = StatusNotify{Status: http.StatusInternalServerError, Err: err}
+
 			}
+			m[issueLabel] = StatusNotify{Status: http.StatusOK, Err: nil}
 			continue
 		}
 
@@ -133,23 +144,26 @@ func (r *Receiver) Notify(data *alertmanager.Data) error {
 			}
 		}
 
-		
 		// check errors from r.tmpl.Execute()
 		if r.tmpl.err != nil {
-			mutlipeErrors = multierr.Append(mutlipeErrors, temporaryError{r.tmpl.err.Error(), false})
+			m[issueLabel] = StatusNotify{Status: http.StatusInternalServerError, Err: r.tmpl.err}
+			continue
 		}
 		issue, err = r.create(issue)
 		log.Infof("issue %+v", issue)
 		if err != nil {
-			mutlipeErrors = multierr.Append(mutlipeErrors, err)
+			m[issueLabel] = StatusNotify{Status: http.StatusInternalServerError, Err: err}
 			continue
 		}
+		m[issueLabel] = StatusNotify{Status: http.StatusOK, Err: nil}
 		log.Infof("Issue created: key=%s ID=%s", issue.Key, issue.ID)
+
 	}
 
-	return mutlipeErrors
+	return m, nil
 
 }
+
 // deepCopyWithTemplate returns a deep copy of a map/slice/array/string/int/bool or combination thereof, executing the
 // provided template (with the provided data) on all string keys or values. All maps are connverted to
 // map[string]interface{}, with all non-string keys discarded.
@@ -227,7 +241,7 @@ func (r *Receiver) search(project, issueLabel string) (*jira.Issue, error) {
 	return nil, nil
 }
 func (r *Receiver) addComment(issue *jira.Issue, commentstring string) error {
-	comment := &jira.Comment{Body:commentstring}
+	comment := &jira.Comment{Body: commentstring}
 	comment, _, err := r.client.Issue.AddComment(issue.ID, comment)
 	return err
 
@@ -251,7 +265,6 @@ func (r *Receiver) reopen(issueKey string) error {
 	return temporaryError{tmp: false, msg: fmt.Sprintf("JIRA state %q does not exist or no transition possible for %s", r.conf.ReopenState, issueKey)}
 }
 
-
 func (r *Receiver) create(issue *jira.Issue) (*jira.Issue, error) {
 	log.Infof("create: issue=%+v", *issue)
 	issue, resp, err := r.client.Issue.Create(issue)
@@ -273,17 +286,15 @@ func handleJiraError(api string, resp *jira.Response, err error) error {
 	if resp != nil && resp.StatusCode/100 != 2 {
 		retry := resp.StatusCode == 500 || resp.StatusCode == 503
 		body, _ := ioutil.ReadAll(resp.Body)
-		
+
 		requestDump, err := httputil.DumpRequest(resp.Request, false)
 		if err != nil {
-		  	fmt.Println(err)
+			fmt.Println(err)
 		}
 		fmt.Println(string(requestDump))
 
-		
 		// go-jira error message is not particularly helpful, replace it
 		return temporaryError{msg: fmt.Sprintf("JIRA request %s returned status %s, body %q", resp.Request.URL, resp.Status, string(body)), tmp: retry}
 	}
 	return temporaryError{tmp: false, msg: fmt.Sprintf("JIRA request %s failed: %s", api, err)}
 }
-

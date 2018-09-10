@@ -81,23 +81,35 @@ func main() {
 				errorHandler(w, http.StatusInternalServerError, err, conf.Name, &data)
 				return
 			}
-			if err := r.Notify(&data); err != nil {
-				istemporary := func(err error) bool {
-					te, ok := err.(jiralert.Temporary)
-					return ok && te.Temporary()
-				}
-				var status int
-				if istemporary(err) {
-					status = http.StatusServiceUnavailable
-				} else {
-					status = http.StatusInternalServerError
-				}
-				errorHandler(w, status, err, conf.Name, &data)
+			log.Info("able to create receiver")
+			m, err := r.Notify(&data)
+			if err != nil {
+				errorHandler(w, http.StatusInternalServerError, err, conf.Name, &data)
 				return
 			}
-		}
+			log.Infof("responses %+v", m)
+			statusJson, err := json.Marshal(m)
+			if err != nil {
+				errorHandler(w, http.StatusInternalServerError, err, conf.Name, &data)
+				return
+			}
 
-		requestTotal.WithLabelValues(conf.Name, "200").Inc()
+			responseStatus := 0
+			for k := range m {
+				log.Info(m[k].Status)
+				if responseStatus == 0 {
+					responseStatus = m[k].Status
+				}
+				if previouStatus != m[k].Status {
+					responseStatus = http.StatusMultiStatus
+					break
+				}
+
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(responseStatus)
+			w.Write(statusJson)
+		}
 	})
 
 	http.HandleFunc("/", HomeHandlerFunc())
