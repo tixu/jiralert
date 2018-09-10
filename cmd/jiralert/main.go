@@ -1,19 +1,26 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 
 	_ "net/http/pprof"
 
-	"github.com/prometheus/client_golang/prometheus/promhttp"
+
 	log "github.com/sirupsen/logrus"
 	"github.com/tixu/jiralert"
 	"github.com/tixu/jiralert/alertmanager"
+	"go.opencensus.io/exporter/prometheus"
+	"go.opencensus.io/stats/view"
+	"go.opencensus.io/stats"
+	"go.opencensus.io/tag"
+	
 )
 
 const (
@@ -32,10 +39,42 @@ var (
 	BuildDate = "<build_date>"
 	// Hash is the git hash
 	Hash = "<hash>"
+
+	MGroupIn       = stats.Int64("jira/group_in", "The number of jira group received", "1")
+	MAlarmIn       = stats.Int64("jira/alarm_in", "The number of alarms we received","1")
+	
+	receiverKey, _ = tag.NewKey("receiver")
+	alarmKey, _ = tag.NewKey("alert")
+	statusKey,_ = tag.NewKey("status")
+	
+	GroupCountView = &view.View{
+		Name:        "jiralert/group",
+		Measure:     MGroupIn,
+		TagKeys: []tag.Key{receiverKey},
+		Description: "The number of jira group received",
+		Aggregation: view.Sum(),
+	}
+	AlarmsCountView = &view.View{
+		Name:        "jiralert/alarm",
+		Measure:     MAlarmIn,
+		TagKeys: []tag.Key{receiverKey,alarmKey,statusKey},
+		Description: "The number of alarms received",
+		Aggregation: view.Count(),
+	}
 )
 
 func main() {
-
+	
+	exporter, err := prometheus.NewExporter(prometheus.Options{})
+	if err != nil {
+		log.Fatal(err)
+	}
+	view.RegisterExporter(exporter)
+	if err := view.Register(GroupCountView,AlarmsCountView); err != nil {
+		log.Fatalf("Failed to register views: %v", err)
+	}
+	// Set reporting period to report data at every second.
+	view.SetReportingPeriod(1 * time.Second)
 	flag.Parse()
 	jiraEndpoint := jiralert.APIConfig{URL: *jiraurl, User: *jirauser, Password: *jirapassword}
 	log.Infof("Starting JIRAlert version %s hash %s date %s", Version, Hash, BuildDate)
@@ -50,7 +89,8 @@ func main() {
 		log.Fatalf("Error loading templates from %s: %s", config.Template, err)
 	}
 
-	http.HandleFunc("/alert", func(w http.ResponseWriter, req *http.Request) {
+	http.HandleFunc("/alert",func(w http.ResponseWriter, req *http.Request) {
+		
 		log.Infof("Handling /alert webhook request")
 		defer req.Body.Close()
 
@@ -69,6 +109,12 @@ func main() {
 		log.Infof("Matched receiver: %q", conf.Name)
 
 		// Filter out resolved alerts, not interested in them.
+		ctx, err := tag.New(context.Background(), tag.Insert(receiverKey,data.Receiver)) 
+		if (err !=nil){
+			log.Fatal(err)
+		}
+		//stats.Record(ctx,MGroupIn.M(1))
+		defer stats.Record(ctx,MGroupIn.M(1))
 		alerts := data.Alerts.Firing()
 		if len(alerts) < len(data.Alerts) {
 			log.Warningf("Please set \"send_resolved: false\" on receiver %s in the Alertmanager config", conf.Name)
@@ -76,13 +122,13 @@ func main() {
 		}
 
 		if len(data.Alerts) > 0 {
-			r, err := jiralert.NewReceiver(&jiraEndpoint, conf, tmpl)
+			r, err := jiralert.NewReceiver(ctx, &jiraEndpoint, conf, tmpl)
 			if err != nil {
 				errorHandler(w, http.StatusInternalServerError, err, conf.Name, &data)
 				return
 			}
 			log.Info("able to create receiver")
-			m, err := r.Notify(&data)
+			m, err := r.Notify(ctx,&data)
 			if err != nil {
 				errorHandler(w, http.StatusInternalServerError, err, conf.Name, &data)
 				return
@@ -96,14 +142,17 @@ func main() {
 
 			responseStatus := 0
 			for k := range m {
-				log.Info(m[k].Status)
+				alertctx, _ := tag.New(ctx, tag.Insert(alarmKey, k),tag.Insert(statusKey,strconv.Itoa((m[k].Status))))
+				stats.Record(alertctx,MAlarmIn.M(1))
+				
 				if responseStatus == 0 {
 					responseStatus = m[k].Status
 				}
-				if previouStatus != m[k].Status {
+				if responseStatus != m[k].Status{
 					responseStatus = http.StatusMultiStatus
 					break
 				}
+				
 
 			}
 			w.Header().Set("Content-Type", "application/json")
@@ -115,7 +164,7 @@ func main() {
 	http.HandleFunc("/", HomeHandlerFunc())
 	http.HandleFunc("/config", ConfigHandlerFunc(config))
 	http.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { http.Error(w, "OK", http.StatusOK) })
-	http.Handle("/metrics", promhttp.Handler())
+	http.Handle("/metrics", exporter)
 
 	if os.Getenv("PORT") != "" {
 		*listenAddress = ":" + os.Getenv("PORT")

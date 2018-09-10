@@ -8,6 +8,7 @@ import (
 	"net/http/httputil"
 	"reflect"
 	"strings"
+	"context"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/tixu/jiralert/alertmanager"
@@ -49,7 +50,7 @@ type Notifier interface {
 }
 
 // NewReceiver creates a Receiver using the provided configuration and template.
-func NewReceiver(a *APIConfig, c *ReceiverConfig, t *Template) (*Receiver, error) {
+func NewReceiver(context context.Context, a *APIConfig, c *ReceiverConfig, t *Template) (*Receiver, error) {
 	client, err := jira.NewClient(http.DefaultClient, a.URL)
 	if err != nil {
 		return nil, err
@@ -60,7 +61,7 @@ func NewReceiver(a *APIConfig, c *ReceiverConfig, t *Template) (*Receiver, error
 }
 
 // Notify implements the Notifier interface.
-func (r *Receiver) Notify(data *alertmanager.Data) (map[string]StatusNotify, error) {
+func (r *Receiver) Notify(context context.Context, data *alertmanager.Data) (map[string]StatusNotify, error) {
 	var m map[string]StatusNotify = make(map[string]StatusNotify)
 	project := r.tmpl.Execute(r.conf.Project, data)
 	// check errors from r.tmpl.Execute()

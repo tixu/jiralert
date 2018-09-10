@@ -25,6 +25,7 @@ require (
 	github.com/spf13/pflag v1.0.2 // indirect
 	github.com/spf13/viper v1.1.0
 	github.com/trivago/tgo v1.0.1
+	go.opencensus.io v0.15.0
 	go.uber.org/atomic v1.3.2 // indirect
 	go.uber.org/multierr v1.1.0
 	golang.org/x/crypto v0.0.0-20180904163835-0709b304e793 // indirect
