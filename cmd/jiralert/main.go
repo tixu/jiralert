@@ -14,13 +14,14 @@ import (
 
 
 	log "github.com/sirupsen/logrus"
+    bolt "go.etcd.io/bbolt"
 	"github.com/tixu/jiralert"
 	"github.com/tixu/jiralert/alertmanager"
 	"go.opencensus.io/exporter/prometheus"
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/stats"
 	"go.opencensus.io/tag"
-	
+
 )
 
 const (
@@ -29,10 +30,12 @@ const (
 
 var (
 	listenAddress = flag.String("listen-address", ":9097", "The address to listen on for HTTP requests.")
-	configFile    = flag.String("config", "config/jiralert.yml", "The JIRAlert configuration file")
+	configFile    = flag.String("config", "config", "The JIRAlert configuration file")
+	dbFile        = flag.String("dbfile", "my.db", "The local file")
 	jirauser      = flag.String("jirauser", "jirauser", "The user accessing JIRA")
 	jirapassword  = flag.String("jirapassword", "jirapassword", "The user's password accessing JIRA")
 	jiraurl       = flag.String("jiraurl", "https://jira.smals.be", "The Jira url")
+	
 	// Version is the build version, set by make to latest git tag/hash via `-ldflags "-X main.Version=$(VERSION)"`.
 	Version = "<local build>"
 	// BuildDate is the Build date
@@ -64,7 +67,7 @@ var (
 )
 
 func main() {
-	
+
 	exporter, err := prometheus.NewExporter(prometheus.Options{})
 	if err != nil {
 		log.Fatal(err)
@@ -74,12 +77,14 @@ func main() {
 		log.Fatalf("Failed to register views: %v", err)
 	}
 	// Set reporting period to report data at every second.
-	view.SetReportingPeriod(1 * time.Second)
+	view.SetReportingPeriod(10 * time.Second)
 	flag.Parse()
 	jiraEndpoint := jiralert.APIConfig{URL: *jiraurl, User: *jirauser, Password: *jirapassword}
 	log.Infof("Starting JIRAlert version %s hash %s date %s", Version, Hash, BuildDate)
-
-	config, err := jiralert.ReadConfiguration("config")
+	if err = initDB(*dbFile); err !=nil {
+		panic(err)
+	}
+	config, err := jiralert.ReadConfiguration(*configFile)
 	if err != nil {
 		log.Fatalf("Error loading configuration: %s", err)
 	}
@@ -90,31 +95,29 @@ func main() {
 	}
 
 	http.HandleFunc("/alert",func(w http.ResponseWriter, req *http.Request) {
-		
 		log.Infof("Handling /alert webhook request")
-		defer req.Body.Close()
-
 		// https://godoc.org/github.com/prometheus/alertmanager/template#Data
 		data := alertmanager.Data{}
 		if err := json.NewDecoder(req.Body).Decode(&data); err != nil {
 			errorHandler(w, http.StatusBadRequest, err, unknownReceiver, &data)
 			return
 		}
-
+		defer req.Body.Close()
+		ctx, err := tag.New(context.Background(), tag.Insert(receiverKey,data.Receiver)) 
+		if (err !=nil){
+			log.Fatal(err)
+		}
+		defer stats.Record(ctx,MGroupIn.M(1))
 		conf := config.ReceiverByName(data.Receiver)
 		if conf == nil {
+			tag.Insert(statusKey,strconv.Itoa(http.StatusNotFound))
 			errorHandler(w, http.StatusNotFound, fmt.Errorf("Receiver missing: %s", data.Receiver), unknownReceiver, &data)
 			return
 		}
 		log.Infof("Matched receiver: %q", conf.Name)
 
 		// Filter out resolved alerts, not interested in them.
-		ctx, err := tag.New(context.Background(), tag.Insert(receiverKey,data.Receiver)) 
-		if (err !=nil){
-			log.Fatal(err)
-		}
-		//stats.Record(ctx,MGroupIn.M(1))
-		defer stats.Record(ctx,MGroupIn.M(1))
+		
 		alerts := data.Alerts.Firing()
 		if len(alerts) < len(data.Alerts) {
 			log.Warningf("Please set \"send_resolved: false\" on receiver %s in the Alertmanager config", conf.Name)
@@ -122,7 +125,7 @@ func main() {
 		}
 
 		if len(data.Alerts) > 0 {
-			r, err := jiralert.NewReceiver(ctx, &jiraEndpoint, conf, tmpl)
+			r, err := jiralert.NewReceiver(ctx, &jiraEndpoint, conf, tmpl, *dbFile)
 			if err != nil {
 				errorHandler(w, http.StatusInternalServerError, err, conf.Name, &data)
 				return
@@ -166,6 +169,7 @@ func main() {
 	http.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { http.Error(w, "OK", http.StatusOK) })
 	http.Handle("/metrics", exporter)
 
+
 	if os.Getenv("PORT") != "" {
 		*listenAddress = ":" + os.Getenv("PORT")
 	}
@@ -193,4 +197,23 @@ func errorHandler(w http.ResponseWriter, status int, err error, receiver string,
 
 	log.Errorf("%d %s: err=%s receiver=%q groupLabels=%+v", status, http.StatusText(status), err, receiver, data.GroupLabels)
 	requestTotal.WithLabelValues(receiver, strconv.FormatInt(int64(status), 10)).Inc()
+}
+
+func initDB(dbFile string) error{
+
+	db, err := bolt.Open(dbFile, 0666, nil)
+	if err != nil {
+	  return err
+	}
+	defer db.Close()
+
+	db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucketIfNotExists([]byte("JIRA"))
+		if err != nil {
+			return fmt.Errorf("create bucket: %s", err)
+		}
+		return nil
+	})
+	return nil
+
 }

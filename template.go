@@ -45,7 +45,7 @@ func LoadTemplate(path string) (*Template, error) {
 // defined in t.tmpl (so they may be referenced and used) and applies the resulting template to the specified data
 // object, returning the output as a string.
 func (t *Template) Execute(text string, data interface{}) string {
-	log.Infof("Executing template %q...", text)
+
 	if !strings.Contains(text, "{{") {
 		log.Infof("  returning unchanged.")
 		return text
@@ -67,6 +67,6 @@ func (t *Template) Execute(text string, data interface{}) string {
 	var buf bytes.Buffer
 	t.err = tmpl.Execute(&buf, data)
 	ret := buf.String()
-	log.Infof("  returning %q.", ret)
+
 	return ret
 }

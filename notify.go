@@ -2,18 +2,19 @@ package jiralert
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httputil"
 	"reflect"
 	"strings"
-	"context"
 
+	"github.com/andygrunwald/go-jira"
 	log "github.com/sirupsen/logrus"
 	"github.com/tixu/jiralert/alertmanager"
 	"github.com/trivago/tgo/tcontainer"
-	"github.com/andygrunwald/go-jira"
+	bolt "go.etcd.io/bbolt"
 )
 
 //github.com/andygrunwald/go-jira
@@ -22,14 +23,7 @@ type Receiver struct {
 	conf   *ReceiverConfig
 	tmpl   *Template
 	client *jira.Client
-}
-
-type Temporary interface {
-	Temporary() bool
-}
-type temporaryError struct {
-	msg string
-	tmp bool
+	dbFile  string
 }
 
 type StatusNotify struct {
@@ -37,50 +31,46 @@ type StatusNotify struct {
 	Err    error
 }
 
-func (e temporaryError) Error() string {
-	return fmt.Sprintf("temporary error %s", e.msg)
-}
-
-func (e temporaryError) Temporary() bool {
-	return e.tmp
-}
-
 type Notifier interface {
 	Notify(data *alertmanager.Data) map[string]StatusNotify
 }
 
 // NewReceiver creates a Receiver using the provided configuration and template.
-func NewReceiver(context context.Context, a *APIConfig, c *ReceiverConfig, t *Template) (*Receiver, error) {
+func NewReceiver(context context.Context, a *APIConfig, c *ReceiverConfig, t *Template, file string) (*Receiver, error) {
 	client, err := jira.NewClient(http.DefaultClient, a.URL)
 	if err != nil {
 		return nil, err
 	}
+	
+	
 	client.Authentication.SetBasicAuth(a.User, string(a.Password))
 
-	return &Receiver{conf: c, tmpl: t, client: client}, nil
+	return &Receiver{conf: c, tmpl: t, client: client,dbFile: file}, nil
+}
+func(r  *Receiver) shutDown (){
+	
 }
 
 // Notify implements the Notifier interface.
 func (r *Receiver) Notify(context context.Context, data *alertmanager.Data) (map[string]StatusNotify, error) {
+	
 	var m map[string]StatusNotify = make(map[string]StatusNotify)
 	project := r.tmpl.Execute(r.conf.Project, data)
 	// check errors from r.tmpl.Execute()
 	if r.tmpl.err != nil {
 		return nil, r.tmpl.err
 	}
-	log.Infof("looping on the alerts from the group %s", toIssueLabel(data.CommonLabels))
+	log.Infof("looping on the alerts from the group")
 	// multipeErrors will be used to stock errors
 	// occuring while iterating on alarms
 
 	for _, alert := range data.Alerts {
 		// Looks like an ALERT metric name, with spaces removed.
 		issueLabel := toIssueLabel(alert.Labels)
-		log.Infof("looking for issue with label : %s", issueLabel)
-		issue, err := r.search(project, issueLabel)
+		issue, err := r.getIssue(issueLabel, project)
 		if err != nil {
 			log.Warnf("got an error while searching %s", err)
 			m[issueLabel] = StatusNotify{Status: http.StatusInternalServerError, Err: err}
-
 			continue
 		}
 
@@ -219,6 +209,7 @@ func toIssueLabel(groupLabels alertmanager.KV) string {
 }
 
 func (r *Receiver) search(project, issueLabel string) (*jira.Issue, error) {
+
 	query := fmt.Sprintf("project=%s and labels=%q order by key", project, issueLabel)
 	options := &jira.SearchOptions{
 		Fields:     []string{"summary", "status", "resolution"},
@@ -263,7 +254,7 @@ func (r *Receiver) reopen(issueKey string) error {
 			return nil
 		}
 	}
-	return temporaryError{tmp: false, msg: fmt.Sprintf("JIRA state %q does not exist or no transition possible for %s", r.conf.ReopenState, issueKey)}
+	return fmt.Errorf("JIRA state %q does not exist or no transition possible for %s", r.conf.ReopenState, issueKey)
 }
 
 func (r *Receiver) create(issue *jira.Issue) (*jira.Issue, error) {
@@ -277,6 +268,74 @@ func (r *Receiver) create(issue *jira.Issue) (*jira.Issue, error) {
 	return issue, nil
 }
 
+func (r *Receiver) getIssue(issueLabel, project string) (*jira.Issue, error) {
+	db, err := bolt.Open(r.dbFile, 0600, nil)
+	
+	
+	
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+	
+	log.Infof("getting   issue with label : %s", issueLabel)
+	var id string
+	
+	err = db.View(func(tx *bolt.Tx) error {
+		bk := tx.Bucket([]byte("JIRA"))
+		bs := bk.Get([]byte(issueLabel))
+		if bs == nil {
+			return fmt.Errorf("issue not found locally")
+		}
+		id = string(bs)
+		log.Infof("local ID is %s", id)
+		return nil
+	})
+
+	if len(id) == 0 {
+		// we did not find anything
+		issue, err := r.search(project, issueLabel)
+		if err != nil {
+			log.Warnf("got an error while searching %s", err)
+			return nil, err
+		}
+		if issue == nil {
+			return nil, nil
+		
+			}	// we found something
+		err = db.Update(func(tx *bolt.Tx) error {
+			bk := tx.Bucket([]byte("JIRA"))
+			return bk.Put([]byte(issueLabel), []byte(issue.ID))
+
+		})
+		//we return the issue after updating the db
+		return issue, nil
+	}
+
+	issue, _, err := r.client.Issue.Get(id, nil)
+	if err != nil {
+		log.Infof("got an error while getting the issue by id %s", err )
+		issue, err := r.search(project, issueLabel)
+		if err != nil {
+			log.Warnf("got an error while searching %s", err)
+			return nil, err
+		}
+		if issue != nil {// we found something
+		err = db.Update(func(tx *bolt.Tx) error {
+			bk, err := tx.CreateBucketIfNotExists([]byte("JIRA"))
+			if err != nil {
+				return err
+			}
+			return bk.Put([]byte(issueLabel), []byte(issue.ID))
+		})
+	}
+		//we return the issue after updating the db
+		return issue, nil
+	}
+	return issue, nil
+
+}
+
 func handleJiraError(api string, resp *jira.Response, err error) error {
 	if resp == nil || resp.Request == nil {
 		log.Infof("handleJiraError: api=%s, err=%s", api, err)
@@ -285,17 +344,14 @@ func handleJiraError(api string, resp *jira.Response, err error) error {
 	}
 
 	if resp != nil && resp.StatusCode/100 != 2 {
-		retry := resp.StatusCode == 500 || resp.StatusCode == 503
 		body, _ := ioutil.ReadAll(resp.Body)
-
 		requestDump, err := httputil.DumpRequest(resp.Request, false)
 		if err != nil {
 			fmt.Println(err)
 		}
 		fmt.Println(string(requestDump))
-
 		// go-jira error message is not particularly helpful, replace it
-		return temporaryError{msg: fmt.Sprintf("JIRA request %s returned status %s, body %q", resp.Request.URL, resp.Status, string(body)), tmp: retry}
+		return fmt.Errorf("JIRA request %s returned status %s, body %q", resp.Request.URL, resp.Status, string(body))
 	}
-	return temporaryError{tmp: false, msg: fmt.Sprintf("JIRA request %s failed: %s", api, err)}
+	return fmt.Errorf("JIRA request %s failed: %s", api, err)
 }
