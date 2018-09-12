@@ -4,6 +4,8 @@ github.com/beorn7/perks v0.0.0-20160804104726-4c0e84591b9a h1:BtpsbiV638WQZwhA98
 github.com/beorn7/perks v0.0.0-20160804104726-4c0e84591b9a/go.mod h1:Dwedo/Wpr24TaqPxmxbtue+5NUziq4I4S80YR8gNf3Q=
 github.com/boltdb/bolt v1.3.1 h1:JQmyP4ZBrce+ZQu0dY660FMfatumYDLun9hBCUVIkF4=
 github.com/boltdb/bolt v1.3.1/go.mod h1:clJnj/oiGkjum5o1McbSZDSLxVThjynRyGBgiAx27Ps=
+github.com/coreos/bbolt v1.3.0 h1:HIgH5xUWXT914HCI671AxuTTqjj64UOFr7pHn48LUTI=
+github.com/coreos/bbolt v1.3.0/go.mod h1:iRUV2dpdMOn7Bo10OQBFzIJO9kkE559Wcmn+qkEiiKk=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/fatih/structs v0.0.0-20171020064819-f5faa72e7309 h1:yetGKN1jYaaVt+q69KPz+V2Z64OyTw/KfTNQS90n/tU=
 github.com/fatih/structs v0.0.0-20171020064819-f5faa72e7309/go.mod h1:9NiDSp5zOcgEDl+j00MP/WkGVPOlPRLejGD8Ga6PJ7M=
@@ -19,6 +21,8 @@ github.com/google/go-querystring v0.0.0-20170111101155-53e6ce116135 h1:zLTLjkaOF
 github.com/google/go-querystring v0.0.0-20170111101155-53e6ce116135/go.mod h1:odCYkC5MyYFN7vkCjXpyrEuKhc/BUO6wN/zVPAxq5ck=
 github.com/hashicorp/hcl v1.0.0 h1:0Anlzjpi4vEasTeNFn2mLJgTSwt0+6sfsiTG8qcWGx4=
 github.com/hashicorp/hcl v1.0.0/go.mod h1:E5yfLk+7swimpb2L/Alb/PJmXilQ/rhwaUYs4T20WEQ=
+github.com/magefile/mage v1.4.0 h1:RI7B1CgnPAuu2O9lWszwya61RLmfL0KCdo+QyyI/Bhk=
+github.com/magefile/mage v1.4.0/go.mod h1:IUDi13rsHje59lecXokTfGX0QIzO45uVPlXnJYsXepA=
 github.com/magiconair/properties v1.8.0 h1:LLgXmsheXeRoUOBOjtwPQCWIYqM/LU1ayDtDePerRcY=
 github.com/magiconair/properties v1.8.0/go.mod h1:PppfXfuXeibc/6YijjN8zIbojt8czPbwD3XqdrwzmxQ=
 github.com/matttproud/golang_protobuf_extensions v1.0.1 h1:4hp9jkHxhMHkqkrB3Ix0jegS5sx/RkqARlsWZ6pIwiU=
@@ -35,6 +39,10 @@ github.com/prometheus/common v0.0.0-20171006141418-1bab55dd05db h1:PmL7nSW2mvuot
 github.com/prometheus/common v0.0.0-20171006141418-1bab55dd05db/go.mod h1:daVV7qP5qjZbuso7PdcryaAu0sAZbrN9i7WWcTMWvro=
 github.com/prometheus/procfs v0.0.0-20171017214025-a6e9df898b13 h1:iAstix1KspoLBRl8NoQH8wCdrkaLCdcHhF98EE5b3dY=
 github.com/prometheus/procfs v0.0.0-20171017214025-a6e9df898b13/go.mod h1:c3At6R/oaqEKCNdg8wHV1ftS6bRYblBhIjjI8uT2IGk=
+github.com/russross/blackfriday v2.0.0+incompatible h1:cBXrhZNUf9C+La9/YpS+UHpUT8YD6Td9ZMSU9APFcsk=
+github.com/russross/blackfriday v2.0.0+incompatible/go.mod h1:JO/DiYxRf+HjHt06OyowR9PTA263kcR/rfWxYHBV53g=
+github.com/shurcooL/sanitized_anchor_name v0.0.0-20170918181015-86672fcb3f95 h1:/vdW8Cb7EXrkqWGufVMES1OH2sU9gKVb2n9/1y5NMBY=
+github.com/shurcooL/sanitized_anchor_name v0.0.0-20170918181015-86672fcb3f95/go.mod h1:1NzhyTcUVG4SuEtjjoZeVRXNmyL/1OwPU0+IJeTBvfc=
 github.com/sirupsen/logrus v1.0.6 h1:hcP1GmhGigz/O7h1WVUM5KklBp1JoNS9FggWKdj/j3s=
 github.com/sirupsen/logrus v1.0.6/go.mod h1:pMByvHTf9Beacp5x1UXfOR9xyW/9antXMhjMPG0dEzc=
 github.com/spf13/afero v1.1.1 h1:Lt3ihYMlE+lreX1GS4Qw4ZsNpYQLxIXKBTEOXm3nt6I=
@@ -49,6 +57,8 @@ github.com/spf13/viper v1.1.0 h1:V7OZpY8i3C1x/pDmU0zNNlfVoDz112fSYvtWMjjS3f4=
 github.com/spf13/viper v1.1.0/go.mod h1:A8kyI5cUJhb8N+3pkfONlcEcZbueH6nhAm0Fq7SrnBM=
 github.com/tixu/jiralert v0.0.0-20180519110126-e6a3a85bd981 h1:MuaU3qYEKvRZIHd2fWpLYQTjLrHcoSTLZwuU6WZMYHg=
 github.com/tixu/jiralert v0.0.0-20180519110126-e6a3a85bd981/go.mod h1:BqHvtVMgqdP2qdSyndKt9dpLDeWb0h1r13lc0vX3bhs=
+github.com/trK54Ylmz/logrus-boltdb-hook v0.0.0-20180811094144-750b83e7a3f5 h1:3V0okbKuXfXz24TMvfOf39U94yZoGJt5UqPVXRKpXus=
+github.com/trK54Ylmz/logrus-boltdb-hook v0.0.0-20180811094144-750b83e7a3f5/go.mod h1:g2dR+V/tnIOqwMezv2DrESREjN6YQYBLoBClWmqFF00=
 github.com/trivago/tgo v1.0.1 h1:bxatjJIXNIpV18bucU4Uk/LaoxvxuOlp/oowRHyncLQ=
 github.com/trivago/tgo v1.0.1/go.mod h1:w4dpD+3tzNIIiIfkWWa85w5/B77tlvdZckQ+6PkFnhc=
 go.etcd.io/bbolt v1.3.0 h1:oY10fI923Q5pVCVt1GBTZMn8LHo5M+RCInFpeMnV4QI=

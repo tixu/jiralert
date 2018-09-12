@@ -15,7 +15,7 @@ import (
 
 const (
 	packageName = "github.com/tixu/jiralert/cmd/jiralert"
-	executable  = "jiralert.exe"
+	executable  = "jiralert"
 )
 
 // ldflags used to build.
@@ -27,7 +27,7 @@ var goexe = "go"
 // Runs go build for jiralert.
 func Build() error {
 
-	return sh.RunWith(flagEnv(), goexe, "build", "--ldflags="+ldflags, "-o", executable, packageName)
+	return sh.RunWith(flagEnv(), goexe, "build", "--ldflags="+ldflags, "-o", executable+".exe", packageName)
 }
 
 // Generates binaries for all supported versions.  Currently that means a
@@ -35,18 +35,25 @@ func Build() error {
 // files will be dumped in the local directory with names according to their
 // supported platform.
 func All() error {
-	/**
 	for _, OS := range []string{"windows", "darwin", "linux"} {
 		for _, ARCH := range []string{"amd64", "386"} {
-			log.Printf("running go build for GOOS=%s GOARCH=%s", OS, ARCH)
-			env := []string{"GOOS=" + OS, "GOARCH=" + ARCH}
-			if err := runWith(env, "go", "build", "-tags", "make", "-o", "gnorm_"+OS+"_"+ARCH, "--ldflags="+ldf); err != nil {
+			fmt.Printf("running go build for GOOS=%s GOARCH=%s", OS, ARCH)
+			env := flagEnv()
+			env["GOOS"]=OS
+			env["GOARCH"]=ARCH
+			var buildName string
+			if (OS == "windows") {
+				buildName = fmt.Sprintf("%s-%s.exe",executable,ARCH)
+			} else {
+				buildName =fmt.Sprintf("%s-%s-%s",executable,ARCH,OS)
+			}
+			if err := sh.RunWith(flagEnv(), goexe, "build", "--ldflags="+ldflags, "-o", buildName, packageName);err !=nil {
 				return err
 			}
 		}
 	}
-	return err
-	*/
+	return nil
+	
 	return fmt.Errorf("unimplemented")
 }
 

@@ -3,7 +3,7 @@
 
 ## Overview
 
-JIRAlert implements Alertmanager's webhook HTTP API and connects to one or more JIRA instances to create highly configurable JIRA issues. One issue is created per distinct group key — as defined by the [`group_by`](https://prometheus.io/docs/alerting/configuration/#<route>) parameter of Alertmanager's `route` configuration section — but not closed when the alert is resolved. The expectation is that a human will look at the issue, take any necessary action, then close it.  If no human interaction is necessary then it should probably not alert in the first place.
+JIRAlert implements Alertmanager's webhook HTTP API and connects to one  JIRA instances to create highly configurable JIRA issues. One issue is created per distinct alert in the alert group but not closed when the alert is resolved. The expectation is that a human will look at the issue, take any necessary action, then close it.  If no human interaction is necessary then it should probably not alert in the first place.
 
 If a corresponding JIRA issue already exists but is resolved, it is reopened. A JIRA transition must exist between the resolved state and the reopened state — as defined by `reopen_state` — or reopening will fail. Optionally a "won't fix" resolution — defined by `wont_fix_resolution` — may be defined: a JIRA issue with this resolution will not be reopened by JIRAlert.
 
@@ -26,11 +26,18 @@ Use the `-help` flag to get help information.
 ```
 $ jiralert -help
 Usage of jiralert:
-  -config string
-      The JIRAlert configuration file (default "config/jiralert.yml")
+ -config string
+        The JIRAlert configuration file (default "config")
+  -dbfile string
+        The local file (default "my.db")
+  -jirapassword string
+        The user's password accessing JIRA (default "jirapassword")
+  -jiraurl string
+        The Jira url (default "https://jira.smals.be")
+  -jirauser string
+        The user accessing JIRA (default "jirauser")
   -listen-address string
-      The address to listen on for HTTP requests. (default ":9097")
-  [...]
+        The address to listen on for HTTP requests. (default ":9097")
 ```
 
 ## Testing

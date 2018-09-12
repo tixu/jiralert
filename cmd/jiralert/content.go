@@ -4,12 +4,13 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
-
+   "io/ioutil"
+  "github.com/russross/blackfriday"
+	log "github.com/sirupsen/logrus"
 	"github.com/tixu/jiralert"
 )
 
 const (
-	docsURL   = "https://github.com/tixu/jiralert#readme"
 	templates = `
     {{ define "page" -}}
       <html>
@@ -35,8 +36,9 @@ const (
           <div class="navbar-header"><a href="/">JIRAlert</a></div>
           <div><a href="/config">Configuration</a></div>
           <div><a href="/metrics">Metrics</a></div>
+          <div><a href="/logs">Logs</a></div>
           <div><a href="/debug/pprof">Profiling</a></div>
-          <div><a href="{{ .DocsUrl }}">Help</a></div>
+         
         </div>
         {{template "content" .}}
       </body>
@@ -44,9 +46,7 @@ const (
     {{- end }}
 
     {{ define "content.home" -}}
-      <p>This is <a href="{{ .DocsUrl }}">JIRAlert</a>, a
-        <a href="https://prometheus.io/docs/alerting/configuration/#webhook_config">webhook receiver</a> for
-        <a href="https://prometheus.io/docs/alerting/alertmanager/">Prometheus Alertmanager</a>.
+        {{ .Body }}
     {{- end }}
 
     {{ define "content.config" -}}
@@ -60,17 +60,6 @@ const (
     {{- end }}
     `
 )
-
-type tdata struct {
-	DocsURL string
-
-	// `/config` only
-	Config string
-
-	// `/error` only
-	Err error
-}
-
 var (
 	allTemplates   = template.Must(template.New("").Parse(templates))
 	homeTemplate   = pageTemplate("home")
@@ -86,19 +75,27 @@ func pageTemplate(name string) *template.Template {
 // HomeHandlerFunc is the HTTP handler for the home page (`/`).
 func HomeHandlerFunc() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		homeTemplate.Execute(w, &tdata{
-			DocsURL: docsURL,
-		})
+  input, err := ioutil.ReadFile("./config/Home.md")
+	if err != nil {
+		http.Error(w, "Internal Server Error", 500)
+	
+	}
+	output := blackfriday.Run(input)
+	homeTemplate.Execute(w, struct{Body template.HTML}{Body: template.HTML(string(output))})
+	}
+}
+
+func LogsHandlerFunc() func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "logfile.log")
 	}
 }
 
 // ConfigHandlerFunc is the HTTP handler for the `/config` page. It outputs the configuration marshaled in YAML format.
 func ConfigHandlerFunc(config *jiralert.Config) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		configTemplate.Execute(w, &tdata{
-			DocsURL: docsURL,
-			Config:  config.String(),
-		})
+		log.Infof("config %s", config.String())
+		configTemplate.Execute(w, struct{Config string}{Config: config.String()})
 	}
 }
 
@@ -106,8 +103,5 @@ func ConfigHandlerFunc(config *jiralert.Config) func(http.ResponseWriter, *http.
 // anything to w before calling HandleError(), or the 500 status code won't be set (and the content might be mixed up).
 func HandleError(err error, metricsPath string, w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusInternalServerError)
-	errorTemplate.Execute(w, &tdata{
-		DocsURL: docsURL,
-		Err:     err,
-	})
+	errorTemplate.Execute(w, struct {Err error}{Err: err})
 }

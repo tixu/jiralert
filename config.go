@@ -64,7 +64,7 @@ type ReceiverConfig struct {
 
 // Config is the top-level configuration for JIRAlert's config file.
 type Config struct {
-	API       *APIConfig
+	
 	Receivers []*ReceiverConfig
 	Template  string
 

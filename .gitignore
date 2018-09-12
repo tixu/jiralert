@@ -4,4 +4,6 @@
 /jiralert*.tar.gz
 /jiralert.exe*
 /vendor
-
+*.log
+*.db
+*.lock

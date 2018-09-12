@@ -9,11 +9,13 @@ import (
 	"os"
 	"strconv"
 	"time"
+	"io"
 
 	_ "net/http/pprof"
 
 
 	log "github.com/sirupsen/logrus"
+	"github.com/trK54Ylmz/logrus-boltdb-hook"
     bolt "go.etcd.io/bbolt"
 	"github.com/tixu/jiralert"
 	"github.com/tixu/jiralert/alertmanager"
@@ -35,7 +37,7 @@ var (
 	jirauser      = flag.String("jirauser", "jirauser", "The user accessing JIRA")
 	jirapassword  = flag.String("jirapassword", "jirapassword", "The user's password accessing JIRA")
 	jiraurl       = flag.String("jiraurl", "https://jira.smals.be", "The Jira url")
-	
+	logCconfig = logrusbolt.BoltHook{Bucket:    "test",Formatter: &log.JSONFormatter{},DBLoc:"test.db"}
 	// Version is the build version, set by make to latest git tag/hash via `-ldflags "-X main.Version=$(VERSION)"`.
 	Version = "<local build>"
 	// BuildDate is the Build date
@@ -65,7 +67,26 @@ var (
 		Aggregation: view.Count(),
 	}
 )
+func init() {
+	var filename string = "logfile.log"
+    // Create the log file if doesn't exist. And append to it if it already exists.
+	logFile, err := os.OpenFile(filename, os.O_WRONLY | os.O_APPEND | os.O_CREATE, 0644)
+	mw := io.MultiWriter(os.Stdout, logFile)
+    Formatter := new(log.TextFormatter)
+    // You can change the Timestamp format. But you have to use the same date and time.
+    // "2006-02-02 15:04:06" Works. If you change any digit, it won't work
+    // ie "Mon Jan 2 15:04:05 MST 2006" is the reference time. You can't change it
+    Formatter.TimestampFormat = "02-01-2006 15:04:05"
+    Formatter.FullTimestamp = true
+    log.SetFormatter(Formatter)
+    if err != nil {
+        // Cannot open log file. Logging to stderr
+        fmt.Println(err)
+    }else{
+        log.SetOutput(mw)
+    }
 
+}
 func main() {
 
 	exporter, err := prometheus.NewExporter(prometheus.Options{})
@@ -167,6 +188,7 @@ func main() {
 	http.HandleFunc("/", HomeHandlerFunc())
 	http.HandleFunc("/config", ConfigHandlerFunc(config))
 	http.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { http.Error(w, "OK", http.StatusOK) })
+	http.HandleFunc("/logs",LogsHandlerFunc())
 	http.Handle("/metrics", exporter)
 
 
