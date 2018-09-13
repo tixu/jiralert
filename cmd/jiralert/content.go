@@ -3,9 +3,10 @@ package main
 import (
 	"fmt"
 	"html/template"
+	"io/ioutil"
 	"net/http"
-   "io/ioutil"
-  "github.com/russross/blackfriday"
+
+	"github.com/russross/blackfriday"
 	log "github.com/sirupsen/logrus"
 	"github.com/tixu/jiralert"
 )
@@ -38,7 +39,7 @@ const (
           <div><a href="/metrics">Metrics</a></div>
           <div><a href="/logs">Logs</a></div>
           <div><a href="/debug/pprof">Profiling</a></div>
-         
+          <div><a href="/reload">Reload</a></div>
         </div>
         {{template "content" .}}
       </body>
@@ -60,6 +61,7 @@ const (
     {{- end }}
     `
 )
+
 var (
 	allTemplates   = template.Must(template.New("").Parse(templates))
 	homeTemplate   = pageTemplate("home")
@@ -75,13 +77,13 @@ func pageTemplate(name string) *template.Template {
 // HomeHandlerFunc is the HTTP handler for the home page (`/`).
 func HomeHandlerFunc() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-  input, err := ioutil.ReadFile("./config/Home.md")
-	if err != nil {
-		http.Error(w, "Internal Server Error", 500)
-	
-	}
-	output := blackfriday.Run(input)
-	homeTemplate.Execute(w, struct{Body template.HTML}{Body: template.HTML(string(output))})
+		input, err := ioutil.ReadFile("./config/Home.md")
+		if err != nil {
+			http.Error(w, "Internal Server Error", 500)
+
+		}
+		output := blackfriday.Run(input)
+		homeTemplate.Execute(w, struct{ Body template.HTML }{Body: template.HTML(string(output))})
 	}
 }
 
@@ -95,13 +97,13 @@ func LogsHandlerFunc() func(http.ResponseWriter, *http.Request) {
 func ConfigHandlerFunc(config *jiralert.Config) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Infof("config %s", config.String())
-		configTemplate.Execute(w, struct{Config string}{Config: config.String()})
+		configTemplate.Execute(w, struct{ Config string }{Config: config.String()})
 	}
 }
 
 // HandleError is an error handler that other handlers defer to in case of error. It is important to not have written
 // anything to w before calling HandleError(), or the 500 status code won't be set (and the content might be mixed up).
-func HandleError(err error, metricsPath string, w http.ResponseWriter, r *http.Request) {
+func HandleError(err error, w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusInternalServerError)
-	errorTemplate.Execute(w, struct {Err error}{Err: err})
+	errorTemplate.Execute(w, struct{ Err error }{Err: err})
 }

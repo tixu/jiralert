@@ -37,7 +37,7 @@ func Build() error {
 func All() error {
 	for _, OS := range []string{"windows", "darwin", "linux"} {
 		for _, ARCH := range []string{"amd64", "386"} {
-			fmt.Printf("running go build for GOOS=%s GOARCH=%s", OS, ARCH)
+			fmt.Printf("running go build for GOOS=%s GOARCH=%s\n", OS, ARCH)
 			env := flagEnv()
 			env["GOOS"]=OS
 			env["GOARCH"]=ARCH

@@ -3,31 +3,16 @@ package jiralert
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v2"
 )
 
-// ReadConfiguration parses the YAML input into a Config
-func ReadConfiguration(configDir string) (*Config, error) {
-	log.Info("loading configuration")
-	cfg := &Config{}
-	viper.AddConfigPath(configDir)
-	viper.SetConfigName("jiralert")
-	err := viper.ReadInConfig()
-
-	if err != nil {
-		return nil, err
-	}
-
-	err = viper.Unmarshal(cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	return cfg, nil
-}
+var (
+	configLock = new(sync.RWMutex)
+)
 
 //APIConfig contains API access fields (URL, user and password)
 type APIConfig struct {
@@ -57,22 +42,40 @@ type ReceiverConfig struct {
 
 	// Label copy settings
 	AddGroupLabels bool
-
-	// Catches all undefined fields and must be empty after parsing.
-	XXX map[string]interface{}
 }
 
 // Config is the top-level configuration for JIRAlert's config file.
 type Config struct {
-	
 	Receivers []*ReceiverConfig
 	Template  string
 
 	// Catches all undefined fields and must be empty after parsing.
-	XXX map[string]interface{} `yaml:",inline" json:"-"`
 }
 
-func (c Config) String() string {
+// ReadConfiguration parses the YAML input into a Config
+func (cfg *Config) ReadConfiguration(configDir string) error {
+	configLock.RLock()
+	defer configLock.RUnlock()
+	log.Info("loading configuration")
+	viper.AddConfigPath(configDir)
+	viper.SetConfigName("jiralert")
+	err := viper.ReadInConfig()
+	if err != nil {
+		log.Warnf("got an error while reading configuration directory %s", configDir)
+		return err
+	}
+	err = viper.Unmarshal(cfg)
+	if err != nil {
+		log.Warnf("got an error while unmarshalling configuration ")
+		return err
+
+	}
+	return nil
+}
+
+func (c *Config) String() string {
+	configLock.RLock()
+	defer configLock.RUnlock()
 	b, err := yaml.Marshal(c)
 	if err != nil {
 		return fmt.Sprintf("<error creating config string: %s>", err)
@@ -82,6 +85,8 @@ func (c Config) String() string {
 
 // ReceiverByName loops the receiver list and returns the first instance with that name
 func (c *Config) ReceiverByName(name string) *ReceiverConfig {
+	configLock.RLock()
+	defer configLock.RUnlock()
 	for _, rc := range c.Receivers {
 		if rc.Name == name {
 			return rc
