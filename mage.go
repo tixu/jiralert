@@ -39,21 +39,21 @@ func All() error {
 		for _, ARCH := range []string{"amd64", "386"} {
 			fmt.Printf("running go build for GOOS=%s GOARCH=%s\n", OS, ARCH)
 			env := flagEnv()
-			env["GOOS"]=OS
-			env["GOARCH"]=ARCH
+			env["GOOS"] = OS
+			env["GOARCH"] = ARCH
 			var buildName string
-			if (OS == "windows") {
-				buildName = fmt.Sprintf("%s-%s.exe",executable,ARCH)
+			if OS == "windows" {
+				buildName = fmt.Sprintf("%s-%s.exe", executable, ARCH)
 			} else {
-				buildName =fmt.Sprintf("%s-%s-%s",executable,ARCH,OS)
+				buildName = fmt.Sprintf("%s-%s-%s", executable, ARCH, OS)
 			}
-			if err := sh.RunWith(flagEnv(), goexe, "build", "--ldflags="+ldflags, "-o", buildName, packageName);err !=nil {
+			if err := sh.RunWith(env, goexe, "build", "--ldflags="+ldflags, "-o", buildName, packageName); err != nil {
 				return err
 			}
 		}
 	}
 	return nil
-	
+
 	return fmt.Errorf("unimplemented")
 }
 

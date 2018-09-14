@@ -3,6 +3,13 @@
 /jiralert
 /jiralert*.tar.gz
 /jiralert.exe*
+jiralert-386-darwin
+jiralert-386-linux
+jiralert-386.exe
+jiralert-amd64-darwin
+jiralert-amd64-linux
+jiralert-amd64.exe
+jiralert-manual
 /vendor
 *.log
 *.db
