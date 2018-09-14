@@ -1,4 +1,16 @@
 language: go
 go:
- - "1.11"
- script: make build 
+  - 1.10.x
+  - master
+
+os:
+  - linux
+  - windows
+
+dist: trusty
+sudo: false
+
+install: true
+
+script:
+  - env GO111MODULE=on go  build -ldflags "-X main.Version=0.4.5" github.com/tixu/jiralert/cmd/jiralert
