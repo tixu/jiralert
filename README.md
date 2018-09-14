@@ -1,6 +1,10 @@
 # JIRAlert [![Build Status](https://travis-ci.org/tixu/jiralert.svg)](https://travis-ci.org/tixu/jiralert) [![Go Report Card](https://goreportcard.com/badge/github.com/tixu/jiralert)](https://goreportcard.com/report/github.com/tixu/jiralert) [![GoDoc](https://godoc.org/github.com/tixu/jiralert?status.svg)](https://godoc.org/github.com/tixu/jiralert)
 [Prometheus Alertmanager](https://github.com/prometheus/alertmanager) webhook receiver for [JIRA](https://www.atlassian.com/software/jira).
 
+
+Forked from https://github.com/free/jiralert. 
+
+
 ## Overview
 
 JIRAlert implements Alertmanager's webhook HTTP API and connects to one or more JIRA instances to create highly configurable JIRA issues. One issue is created per distinct group key — as defined by the [`group_by`](https://prometheus.io/docs/alerting/configuration/#<route>) parameter of Alertmanager's `route` configuration section — but not closed when the alert is resolved. The expectation is that a human will look at the issue, take any necessary action, then close it.  If no human interaction is necessary then it should probably not alert in the first place.
