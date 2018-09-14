@@ -1,15 +1,15 @@
 {{ define "jira.alarm.summary" }}
-   {{.Annotations.Summary}}
+   {{.Annotations.summary}}
 {{end}}
 
-{{ define "jira.alarm.comment" }}{{.Status}}: {{.Annotations.Description}}{{end}}
+{{ define "jira.alarm.comment" }}{{.Status}}: {{.Annotations.description}}{{end}}
 
 
 
 
 {{ define "jira.alarm.description" }}
 Description : 
-   {{.Annotations.Description}}
+   {{.Annotations.description}}
 
 Labels:
 {{ range .Labels.SortedPairs }} - {{ .Name }} = {{ .Value }}
