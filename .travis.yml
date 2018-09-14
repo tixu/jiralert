@@ -13,4 +13,4 @@ sudo: false
 install: true
 
 script:
-  - env GO111MODULE=on go  build -ldflags "-X main.Version=0.4.5" github.com/tixu/jiralert/cmd/jiralert
+  - env GO111MODULE=on go  build -ldflags "-X main.Version=$TRAVIS_TAG -X main.Hash=$TRAVIS_COMMIT"  github.com/tixu/jiralert/cmd/jiralert
