@@ -61,6 +61,13 @@ const (
       <div class="config">
         start :  {{.Status.start}}
       </div>
+      <h2>Build</h2>
+      <div class="config">
+        version :  {{.Version.version}} <br/>
+        builddate : {{.Version.builddate}} <br/>
+        hash: {{.Version.hash}}<br/>
+
+      </div>
       <h2>Endpoint </h2>
        <div class="config">
             url :   {{.Endpoint.url}} <br/>
