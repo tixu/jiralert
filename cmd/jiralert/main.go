@@ -31,10 +31,13 @@ const (
 var (
 	listenAddress = flag.String("listen-address", ":9097", "The address to listen on for HTTP requests.")
 	configFile    = flag.String("config", "config", "The JIRAlert configuration file")
-	dbFile        = flag.String("dbfile", "my.db", "The local file")
+	dbFileName    string
+	logFileName   string
 	jirauser      = flag.String("jirauser", "jirauser", "The user accessing JIRA")
 	jirapassword  = flag.String("jirapassword", "jirapassword", "The user's password accessing JIRA")
 	jiraurl       = flag.String("jiraurl", "https://jira.smals.be", "The Jira url")
+	logLevel      = flag.String("loglevel", "PROD", "log level either PROD or DEV")
+	dataDir       = flag.String("datadir", ".", "location of temporaty file")
 
 	// Version is the build version, set by make to latest git tag/hash via `-ldflags "-X main.Version=$(VERSION)"`.
 	Version = "<local build>"
@@ -78,9 +81,11 @@ var (
 )
 
 func init() {
-	var filename string = "logfile.log"
+	flag.Parse()
+	logFileName = *dataDir + "/logfile.log"
+	dbFileName = *dataDir + "/jiralert.db"
 	// Create the log file if doesn't exist. And append to it if it already exists.
-	logFile, err := os.OpenFile(filename, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
+	logFile, err := os.OpenFile(logFileName, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
 	mw := io.MultiWriter(os.Stdout, logFile)
 	Formatter := new(log.TextFormatter)
 	// You can change the Timestamp format. But you have to use the same date and time.
@@ -89,6 +94,13 @@ func init() {
 	Formatter.TimestampFormat = "02-01-2006 15:04:05"
 	Formatter.FullTimestamp = true
 	log.SetFormatter(Formatter)
+	switch *logLevel {
+	case "PROD":
+		log.SetLevel(log.ErrorLevel)
+	default:
+		log.SetLevel(log.InfoLevel)
+	}
+
 	if err != nil {
 		// Cannot open log file. Logging to stderr
 		fmt.Println(err)
@@ -109,10 +121,10 @@ func main() {
 	}
 	// Set reporting period to report data at every second.
 	view.SetReportingPeriod(10 * time.Second)
-	flag.Parse()
+
 	jiraEndpoint := jiralert.APIConfig{URL: *jiraurl, User: *jirauser, Password: *jirapassword}
 	log.Infof("Starting JIRAlert version %s hash %s date %s", Version, Hash, BuildDate)
-	if err = initDB(*dbFile); err != nil {
+	if err = initDB(dbFileName); err != nil {
 		panic(err)
 	}
 
@@ -190,7 +202,7 @@ func main() {
 		}
 
 		if len(data.Alerts) > 0 {
-			r, err := jiralert.NewReceiver(ctx, &jiraEndpoint, conf, tmpl, *dbFile)
+			r, err := jiralert.NewReceiver(ctx, &jiraEndpoint, conf, tmpl, dbFileName)
 			if err != nil {
 				errorHandler(w, http.StatusInternalServerError, err, conf.Name, &data)
 				return

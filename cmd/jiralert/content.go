@@ -89,7 +89,7 @@ func HomeHandlerFunc() func(http.ResponseWriter, *http.Request) {
 
 func LogsHandlerFunc() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "logfile.log")
+		http.ServeFile(w, r, logFileName)
 	}
 }
 
