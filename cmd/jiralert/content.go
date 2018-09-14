@@ -57,6 +57,10 @@ const (
     {{- end }}
 
     {{ define "content.config" -}}
+      <h2>Status</h2>
+      <div class="config">
+        start :  {{.Status.start}}
+      </div>
       <h2>Endpoint </h2>
        <div class="config">
             url :   {{.Endpoint.url}} <br/>
@@ -115,14 +119,20 @@ func ConfigHandlerFunc(config *jiralert.Config) func(http.ResponseWriter, *http.
 		log.Infof("config %s", config.String())
 		jira := map[string]string{"url": *jiraurl, "user": *jirauser}
 		runtime := map[string]string{"data": *dataDir, "log": *logLevel}
+		version := map[string]string{"version": Version, "buildate": BuildDate, "hash": Hash}
+		status := map[string]string{"start": startDate}
 		data := struct {
 			Config   string
 			Endpoint map[string]string
 			Runtime  map[string]string
+			Version  map[string]string
+			Status   map[string]string
 		}{
 			config.String(),
 			jira,
 			runtime,
+			version,
+			status,
 		}
 		configTemplate.Execute(w, data)
 	}

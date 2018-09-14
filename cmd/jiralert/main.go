@@ -38,6 +38,7 @@ var (
 	jiraurl       = flag.String("jiraurl", "https://jira.smals.be", "The Jira url")
 	logLevel      = flag.String("loglevel", "PROD", "log level either PROD or DEV")
 	dataDir       = flag.String("datadir", ".", "location of temporaty file")
+	startDate     string
 
 	// Version is the build version, set by make to latest git tag/hash via `-ldflags "-X main.Version=$(VERSION)"`.
 	Version = "<local build>"
@@ -81,6 +82,7 @@ var (
 )
 
 func init() {
+	startDate = time.Now().Format("2006-01-02 15:04:05")
 	flag.Parse()
 	logFileName = *dataDir + "/logfile.log"
 	dbFileName = *dataDir + "/jiralert.db"
