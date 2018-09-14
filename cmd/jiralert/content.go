@@ -30,6 +30,12 @@ const (
           h1, h2 { font-weight: 500; }
           a { color: #337ab7; }
           a:hover, a:focus { color: #23527c; }
+          .config {
+            border: 1px solid green ;
+            padding: 10px;
+            font-size: 13px;
+            background-color: #f5f5f5;
+          }
         </style>
       </head>
       <body>
@@ -51,6 +57,16 @@ const (
     {{- end }}
 
     {{ define "content.config" -}}
+      <h2>Endpoint </h2>
+       <div class="config">
+            url :   {{.Endpoint.url}} <br/>
+            user :  {{.Endpoint.user}} <br/>
+       </div>
+      <h2>Runtime </h2>
+      <div class="config">
+        data :   {{.Runtime.data}} </br>
+         log :  {{.Runtime.log}} </br>
+       </div>
       <h2>Configuration</h2>
       <pre>{{ .Config }}</pre>
     {{- end }}
@@ -97,7 +113,18 @@ func LogsHandlerFunc() func(http.ResponseWriter, *http.Request) {
 func ConfigHandlerFunc(config *jiralert.Config) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Infof("config %s", config.String())
-		configTemplate.Execute(w, struct{ Config string }{Config: config.String()})
+		jira := map[string]string{"url": *jiraurl, "user": *jirauser}
+		runtime := map[string]string{"data": *dataDir, "log": *logLevel}
+		data := struct {
+			Config   string
+			Endpoint map[string]string
+			Runtime  map[string]string
+		}{
+			config.String(),
+			jira,
+			runtime,
+		}
+		configTemplate.Execute(w, data)
 	}
 }
 
